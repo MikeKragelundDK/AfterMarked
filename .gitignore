@@ -1,0 +1,131 @@
+# ==========================================================
+#  The Ticket — default ignoreliste
+# ==========================================================
+
+# ----- Byg-output -----
+target/
+build/
+out/
+bin/
+!**/src/**/bin/
+!**/src/**/target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
+
+# ----- Gradle -----
+.gradle/
+gradle-app.setting
+.gradletasknamecache
+**/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# ----- Maven -----
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+release.properties
+dependency-reduced-pom.xml
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+buildNumber.properties
+
+# ----- Spring Boot / runtime -----
+*.log
+logs/
+spring.log
+application-local.properties
+application-local.yml
+application-local.yaml
+application-secrets.*
+
+# ----- Hemmeligheder — må ALDRIG i repoet -----
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.truststore
+secrets/
+credentials.json
+stripe-cli-*
+
+# ----- IDE: IntelliJ -----
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# ----- IDE: Eclipse / VS Code / NetBeans -----
+.classpath
+.project
+.settings/
+.apt_generated/
+.factorypath
+.springBeans
+.sts4-cache
+.vscode/
+!.vscode/extensions.json
+nbproject/private/
+nbbuild/
+nbdist/
+.nb-gradle/
+
+# ----- Node (frontend-værktøj) -----
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnp.*
+
+# ----- OS-støj -----
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ----- Claude Code -----
+# CLAUDE.md, .claude/skills/ og .claude/agents/ hører TIL i repoet.
+.claude/settings.local.json
+.claude/**/*.local.*
+
+# ----- Forretnings- og planlægningsmateriale -----
+# Hører hjemme i Jira / på drevet — ikke i kode-repoet.
+# Generelle dokumenttyper: uønskede i enhver mappe.
+*.pdf
+*.docx
+*.xlsx
+*.pptx
+# Konkrete filer i roden — ankret med "/", så de ikke rammer
+# fremtidige templates/docs i undermapper.
+/PLAN.md
+/SPRINTS.md
+/MOEDE-*.md
+/NOTAT-*.md
+/OPKALD-*.md
+/POTENTIELLE-*.md
+
+# ----- HTML-mockups og demoer (kun roden) -----
+/demo.html
+/demo-*.html
+/demo-src/
+/business-case.html
+/prismodeller.html
+/prismodel-*.html
+/maalliste.html
+/opkald-*.html
