@@ -9,6 +9,8 @@ out/
 bin/
 !**/src/**/bin/
 !**/src/**/target/
+!**/src/**/build/
+!**/src/**/out/
 *.class
 *.jar
 *.war
