@@ -1,0 +1,155 @@
+# The Ticket — leveringspipeline  (Jira SCRUM-6 / E1)
+#
+# Fire gates. Alle skal være grønne, før en PR kan merges.
+#   build    kompilering, unit-tests, Testcontainers mod rigtig Postgres, Modulith-verifikation
+#   sca      Trivy   — kendte CVE'er i vores afhængigheder
+#   sast     Semgrep — sårbarhedsmønstre i vores egen kode
+#   secrets  TruffleHog — hemmeligheder i commits og i historikken
+#
+# ---------------------------------------------------------------------------
+# TÆRSKLER OG TRIAGE  (besluttet 28-08-2026)
+# ---------------------------------------------------------------------------
+#   sca      Blokerer på HIGH + CRITICAL, hvor der findes et fix (ignore-unfixed).
+#            MEDIUM/LOW rapporteres ikke — de drukner signalet for én udvikler.
+#            Accepteret risiko skrives i .trivyignore med CVE-id, dato og begrundelse.
+#            Aldrig en ignore-linje uden begrundelse.
+#
+#   sast     Blokerer på ethvert fund i p/default + p/java.
+#            Falsk positiv lukkes med `// nosemgrep: <regel-id>` på linjen
+#            plus en kommentar om hvorfor. Aldrig et blankt nosemgrep.
+#
+#   secrets  Blokerer på ethvert fund. En hemmelighed, der har været i historikken,
+#            skal ROTERES — det er ikke nok at slette commiten.
+#
+# ---------------------------------------------------------------------------
+# DISKPLADS
+# ---------------------------------------------------------------------------
+#   GitHub gemmer artefakter i 90 dage som default. Det har vi ikke plads til.
+#   Derfor: retention-days: 1 overalt, og der uploades KUN ved fejl.
+#   Grønne kørsler efterlader ingenting. Byg-output (target/, jar) uploades aldrig.
+#   Maven-cachen hører under en anden kvote (10 GB pr. repo, auto-eviction efter
+#   7 dage uden brug) og tæller ikke som artefakt-plads.
+#
+# ---------------------------------------------------------------------------
+# VERSIONER
+# ---------------------------------------------------------------------------
+#   Alt er pinnet — ingen version drift, heller ikke i værktøjskæden.
+#   Actions er pinnet til fuld commit-SHA, ikke til tag: et tag kan repointes af
+#   ejeren, og præcis dét skete for trivy-action i marts 2025. Kommentaren efter
+#   SHA'en siger hvilken version det er. Skift version = skift SHA bevidst.
+#   Scannerne opdateres bevidst, ikke tilfældigt: nye detektorer og CVE-databaser
+#   er en beslutning, ikke en sideeffekt af en kørsel.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # Mandag 05:00 UTC. Nye CVE'er lander uden at nogen committer,
+    # og den ugentlige kørsel scanner HELE historikken for hemmeligheder.
+    - cron: '0 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  # -------------------------------------------------------------------------
+  # 1. Byg og test
+  # -------------------------------------------------------------------------
+  build:
+    name: Byg og test
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Java 25
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+
+      - name: mvn verify
+        # Kører unit-tests, Testcontainers-integrationstest mod rigtig Postgres
+        # og Modulith-verifikationen. Runneren har Docker — Testcontainers
+        # starter selv postgres:18-alpine.
+        run: ./mvnw -B -ntp verify
+
+      - name: Testrapporter (kun ved fejl)
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: surefire-rapporter
+          path: target/surefire-reports/
+          retention-days: 1
+          if-no-files-found: ignore
+
+  # -------------------------------------------------------------------------
+  # 2. SCA — kendte CVE'er i afhængigheder
+  # -------------------------------------------------------------------------
+  sca:
+    name: SCA (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Trivy — afhængigheder
+        # Actionen pinner selv Trivy-CLI'en (v0.70.0 i denne action-version).
+        # Container-image-scanning venter på, at der findes en Dockerfile (E3).
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+
+  # -------------------------------------------------------------------------
+  # 3. SAST — sårbarhedsmønstre i vores egen kode
+  # -------------------------------------------------------------------------
+  sast:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Semgrep
+        # Kører i pinnet container i stedet for som container-job: checkout og
+        # resten af pipelinen bliver på runneren, hvor de opfører sig forudsigeligt.
+        # --error  = ethvert fund giver exit != 0.
+        # --metrics=off = ingen telemetri; regelsæt hentes stadig fra registry.
+        run: |
+          docker run --rm -v "$PWD":/src -w /src semgrep/semgrep:1.175.0 \
+            semgrep scan --config p/default --config p/java --error --metrics=off
+
+  # -------------------------------------------------------------------------
+  # 4. Secrets — hemmeligheder i commits og historik
+  # -------------------------------------------------------------------------
+  secrets:
+    name: Secrets (TruffleHog)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Hele historikken. Med default (depth 1) scanner TruffleHog reelt ingenting.
+          fetch-depth: 0
+
+      - name: TruffleHog
+        # PR og push scanner diffen; schedule og manuel kørsel scanner hele
+        # historikken (actionen tømmer selv base/head på de to event-typer).
+        # Actionens `version` er "latest" som default — den pinnes eksplicit her.
+        # Bemærk: image-tagget er UDEN v-præfiks, action-tagget er MED.
+        uses: trufflesecurity/trufflehog@20652fbbdefffcdaa493a5bf57ab2ac6b1db715b # v3.97.1
+        with:
+          version: 3.97.1
