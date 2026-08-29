@@ -1,0 +1,3 @@
+# Kun jar'en kommer med i build-konteksten — alt andet er stoej for Docker.
+*
+!target/*.jar

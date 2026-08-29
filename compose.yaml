@@ -1,0 +1,72 @@
+# Lokal stak i produktionsform: Postgres + to app-replikaer bag en load balancer.
+#
+#   ./mvnw -B package -DskipTests && docker compose up -d --build --wait
+#   http://localhost:8080          -> markedsplads (operatoer "localhost" fra dev-seedet)
+#   docker compose down -v         -> ryd op, inkl. database
+#
+# N-1-antagelsen (PLAN §2.7) er sand fra dag 1: der er altid to replikaer, og
+# skemaet skal kunne bæres af den gamle og den nye version samtidig.
+
+services:
+
+  db:
+    image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
+    environment:
+      POSTGRES_DB: theticket
+      # Migrationsbrugeren — ejer skemaet. Appen forbinder ALDRIG som den.
+      POSTGRES_USER: theticket
+      POSTGRES_PASSWORD: theticket-dev-only
+      # Laeses af deploy/postgres/init/01-roles.sh ved foerste opstart.
+      THETICKET_RUNTIME_PASSWORD: runtime-dev-only
+    volumes:
+      - ./deploy/postgres/init:/docker-entrypoint-initdb.d:ro
+      - dbdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U theticket -d theticket"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    # Postgres skal have lov at lukke rent. Bliver den SIGKILL'et efter de
+    # default 10s, starter naeste opstart med crash recovery.
+    stop_grace_period: 30s
+
+  app:
+    image: theticket:local
+    build: .
+    deploy:
+      replicas: 2
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      THETICKET_DB_URL: jdbc:postgresql://db:5432/theticket
+      THETICKET_DB_USER: theticket_runtime
+      THETICKET_DB_PASSWORD: runtime-dev-only
+      THETICKET_DB_MIGRATION_USER: theticket
+      THETICKET_DB_MIGRATION_PASSWORD: theticket-dev-only
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      # Readiness paa management-porten — den, load balanceren ikke ser.
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8081/actuator/health/readiness | grep -q UP"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+      start_period: 20s
+    # Skal vaere STOERRE end spring.lifecycle.timeout-per-shutdown-phase (20s).
+    # Ellers naar Docker at sende SIGKILL, mens Spring stadig venter paa
+    # igangvaerende requests — og saa er graceful shutdown kun en indstilling,
+    # ikke en adfaerd.
+    stop_grace_period: 30s
+
+  lb:
+    image: nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de
+    ports:
+      - "8080:80"
+    volumes:
+      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  dbdata:

@@ -1,12 +1,28 @@
 <!DOCTYPE html>
-<html lang="da" xmlns:th="http://www.thymeleaf.org">
+<html th:lang="${#locale.language}" xmlns:th="http://www.thymeleaf.org">
 <head>
 	<meta charset="UTF-8">
-	<title th:text="${modul}">The Ticket</title>
+	<title th:text="#{app.name}">The Ticket</title>
 </head>
 <body>
-	<h1 th:text="${modul}">The Ticket</h1>
-	<p>Hallo verden. Skelettet kører.</p>
-	<p>Spring Boot 4.1 · Java 25 · Spring Modulith</p>
+	<h1 th:text="#{app.name}">The Ticket</h1>
+	<p th:text="#{hello.greeting}">Hello world.</p>
+	<p>
+		<span th:text="#{hello.operator}">Operator</span>:
+		<strong th:text="${operatorName}">—</strong>
+		<small th:text="${operator.hostname()}">host</small>
+	</p>
+	<p th:text="#{hello.stack}">Spring Boot · Java · Spring Modulith</p>
+
+	<!-- Sprogskifteren. Det valgte sprog vises uden link; et ukendt ?lang=
+	     ignoreres af SupportedLocaleChangeInterceptor og aendrer intet. -->
+	<nav>
+		<span th:text="#{language.switch}">Language</span>:
+		<th:block th:each="tag : ${supportedLanguages}">
+			<strong th:if="${tag == #locale.language}" th:text="#{'language.name.' + ${tag}}">xx</strong>
+			<a th:unless="${tag == #locale.language}" th:href="@{'?lang=' + ${tag}}"
+			   th:text="#{'language.name.' + ${tag}}">xx</a>
+		</th:block>
+	</nav>
 </body>
 </html>

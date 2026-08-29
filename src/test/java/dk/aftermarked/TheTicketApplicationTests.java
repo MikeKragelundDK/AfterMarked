@@ -9,7 +9,7 @@ import org.springframework.context.annotation.Import;
 class TheTicketApplicationTests {
 
 	@Test
-	void contextLoads() {
+	void givenAPostgresContainer_whenBootingTheApplication_thenTheContextLoads() {
 	}
 
 }

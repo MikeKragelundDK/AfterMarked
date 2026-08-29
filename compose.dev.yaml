@@ -1,0 +1,24 @@
+# Dev-override: kun til at koere APPEN fra IDE'en mod en rigtig database.
+#
+#   docker compose -f compose.yaml -f compose.dev.yaml up -d db
+#
+# Derefter startes appen fra IntelliJ (eller ./mvnw spring-boot:run) med
+# profilen `dev`, som er dét, der lader Flyway koere db/devseed og oprette
+# operatoeren paa vaertsnavnet "localhost".
+#
+# Filen hedder IKKE compose.override.yaml med vilje: den ville blive flettet
+# ind automatisk af enhver `docker compose`-kommando, ogsaa i CI. Her skal den
+# vaelges eksplicit, saa compose.yaml bliver ved med at beskrive den
+# produktionsformede stak — hvor Postgres bevidst ikke kan naas fra vaerten
+# (StackOpsTest haandhaever det).
+#
+# Ryd op med:
+#   docker compose -f compose.yaml -f compose.dev.yaml down -v
+
+services:
+
+  db:
+    ports:
+      # Kun paa loopback. Uden 127.0.0.1 binder Docker til 0.0.0.0 og goer
+      # databasen tilgaengelig for alle paa netvaerket — ogsaa paa et cafe-wifi.
+      - "127.0.0.1:5432:5432"
