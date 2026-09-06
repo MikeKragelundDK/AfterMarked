@@ -1,5 +1,7 @@
 package dk.aftermarked.web;
 
+import java.time.Instant;
+import java.util.Locale;
 import java.util.UUID;
 
 import dk.aftermarked.LocalizationConfig;
@@ -52,7 +54,8 @@ class LocaleResolutionHttpTest {
 	@BeforeEach
 	void stubTheOperatorAndTranslations() {
 		when(operators.current()).thenReturn(
-				new Operator(new OperatorId(UUID.randomUUID()), "test", "Test Operator", "test.local"));
+				new Operator(new OperatorId(UUID.randomUUID()), "test", "Test Operator", "test.local",
+						Locale.of("da"), true, Instant.EPOCH));
 		when(translations.localize(any(), any(), any(), any(), any()))
 				.thenAnswer(call -> call.getArgument(4));
 	}

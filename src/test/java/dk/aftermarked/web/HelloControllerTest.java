@@ -1,5 +1,6 @@
 package dk.aftermarked.web;
 
+import java.time.Instant;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -44,7 +45,8 @@ class HelloControllerTest {
 
 	@BeforeEach
 	void stubTheCurrentOperator() {
-		when(operators.current()).thenReturn(new Operator(OPERATOR, "test", "Test Operator", "test.local"));
+		when(operators.current()).thenReturn(new Operator(OPERATOR, "test", "Test Operator", "test.local",
+				Locale.of("da"), true, Instant.EPOCH));
 		// Uden oversaettelse falder localize tilbage paa grundteksten — det er
 		// praecis den kontrakt, forsiden hviler paa.
 		when(translations.localize(any(), any(), any(), any(), any()))

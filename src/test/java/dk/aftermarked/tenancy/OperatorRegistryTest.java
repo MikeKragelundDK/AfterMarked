@@ -2,6 +2,7 @@ package dk.aftermarked.tenancy;
 
 import java.sql.SQLException;
 import java.util.List;
+import java.util.Locale;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -107,6 +108,35 @@ class OperatorRegistryTest {
 	void givenABoundContext_whenCallingCurrent_thenItReturnsOnlyTheOwnOperator() {
 		assertThat(OperatorContext.callAs(OperatorSeed.A, registry::current).slug()).isEqualTo("op-a");
 		assertThat(OperatorContext.callAs(OperatorSeed.B, registry::current).slug()).isEqualTo("op-b");
+	}
+
+	/**
+	 * Operatørens basissprog er kundens, ikke husets (PLAN §2.9). Beviset er, at
+	 * to operatører i samme kørsel giver hvert sit svar: læste {@code current()}
+	 * den globale {@code LocalizationConfig.DEFAULT_LOCALE}, ville de være ens,
+	 * og en svensk kundes fuldt gyldige {@code {"sv": …, "en": …}} ville blive
+	 * målt mod dansk og afvist. Samme sag for valutatilstanden — flaget er per
+	 * operatør, ikke en global kontakt.
+	 *
+	 * <p>Seederen navngiver ingen af de to kolonner, så B er samtidig beviset
+	 * for, at V4's DEFAULT holder de otte eksisterende seedere i live.
+	 */
+	@Test
+	void givenAnOperator_whenReadingItsBaseLanguage_thenItComesFromTheDatabaseAndNotTheGlobalDefault() {
+		OperatorContext.runAs(OperatorSeed.A, () -> jdbc
+				.sql("UPDATE operator SET default_locale = 'sv', single_currency = false WHERE id = :id")
+				.param("id", OperatorSeed.A.value())
+				.update());
+
+		Operator a = OperatorContext.callAs(OperatorSeed.A, registry::current);
+		Operator b = OperatorContext.callAs(OperatorSeed.B, registry::current);
+
+		assertThat(a.defaultLocale()).isEqualTo(Locale.forLanguageTag("sv"));
+		assertThat(a.singleCurrency()).as("the currency policy belongs to the operator, not to the instance").isFalse();
+		assertThat(b.defaultLocale())
+				.as("B was seeded without the column — it must keep the default while A does not")
+				.isEqualTo(Locale.of("da"));
+		assertThat(b.singleCurrency()).isTrue();
 	}
 
 	/**

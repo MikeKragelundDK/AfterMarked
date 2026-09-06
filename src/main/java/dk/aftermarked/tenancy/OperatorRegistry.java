@@ -1,5 +1,7 @@
 package dk.aftermarked.tenancy;
 
+import java.time.OffsetDateTime;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -50,16 +52,30 @@ public class OperatorRegistry {
 	 * {@code WHERE id} ville metoden dér returnere den FORRIGE operatørs række
 	 * og kalde den den aktuelle. Med filteret bliver uenigheden i stedet en
 	 * højlydt fejl.
+	 *
+	 * <p>To detaljer i mappingen, som begge er stille fejlkilder:
+	 * {@code default_locale} læses med {@link Locale#forLanguageTag(String)} og
+	 * ikke {@code Locale.of(...)}, fordi kolonnen bærer et sprogtag
+	 * ({@code en-GB}) og ikke et sprog plus et land — {@code Locale.of("en-GB")}
+	 * ville give et sprog, der hedder "en-gb". Og {@code created_at} læses som
+	 * {@link OffsetDateTime}, fordi {@code getTimestamp} ville lægge JVM'ens
+	 * standardzone ned over et tidspunkt, databasen har gemt i UTC.
 	 */
 	public Operator current() {
 		OperatorId id = OperatorContext.required();
-		return jdbc.sql("SELECT id, slug, name, hostname FROM operator WHERE id = :id")
+		return jdbc.sql("""
+				SELECT id, slug, name, hostname, default_locale, single_currency, created_at
+				  FROM operator WHERE id = :id
+				""")
 				.param("id", id.value())
 				.query((rs, row) -> new Operator(
 						new OperatorId(rs.getObject("id", UUID.class)),
 						rs.getString("slug"),
 						rs.getString("name"),
-						rs.getString("hostname")))
+						rs.getString("hostname"),
+						Locale.forLanguageTag(rs.getString("default_locale")),
+						rs.getBoolean("single_currency"),
+						rs.getObject("created_at", OffsetDateTime.class).toInstant()))
 				.optional()
 				.orElseThrow(() -> new IllegalStateException(
 						"Operator " + id + " is in context, but RLS returned no row"));
