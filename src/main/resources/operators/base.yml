@@ -1,0 +1,28 @@
+# ---------------------------------------------------------------------------
+# Faelles feltskema — config-halvdelen af PLAN 2.6's operatoerprofiler
+# ---------------------------------------------------------------------------
+# Filen er ikke en profil i Springs forstand: den laeses ubetinget gennem
+# spring.config.import i application.properties. En operatoerprofil er en MAPPE
+# under operators/, og mappens navn ER operatoerens slug — aldrig et operator_id.
+# Slug'en er stabil, laeselig og staar i URL'er; et id ville goere en config-fil
+# ulaeselig og binde den til én database.
+#
+# base.yml baerer de felter, ALLE kunder har. Listen maa gerne vaere tom: den
+# faelles kerne er i dag den pligtige kerne (organizer/event/ticket_type), og et
+# felt herinde er et felt, hver eneste kunde faar. Det er en produktbeslutning,
+# ikke en konfigurationsdetalje, saa den tages bevidst og ikke ved et uheld.
+#
+# Version'en er skema-versionen, en raekke stemples med, naar den skrives
+# (custom_fields_schema_version). Den taelles OP, aldrig om: en vaerdi skrevet
+# under version 1 skal stadig kunne laeses den dag skemaet staar paa 5, og det
+# er kun sandt, saa laenge et key aldrig skifter type. FieldSchemaRegistry
+# haandhaever netop dét ved opstart.
+#
+# En operatoer UDEN egen mappe falder tilbage til dette skema og logger paa WARN
+# én gang. Den bliver altsaa ikke afvist ved opstart — men hvert custom felt,
+# den pusher, bliver afvist med en besked, der navngiver slug'en.
+theticket:
+  field-schema:
+    base:
+      version: 1
+      fields: []

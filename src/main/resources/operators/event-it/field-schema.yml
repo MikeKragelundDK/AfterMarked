@@ -1,0 +1,46 @@
+# ---------------------------------------------------------------------------
+# Feltskema for pilotkunden — mappenavnet event-it ER operatoerens slug
+# ---------------------------------------------------------------------------
+# Noeglen under `operators` skal vaere den samme streng som operator.slug i
+# databasen. Bindestregen kraever ingen klammer: Boots relaxed binding bevarer
+# smaa bogstaver, cifre og '-' i en map-noegle ordret. En noegle med andre tegn
+# ville skulle skrives som "[...]", og saa var slug'en i forvejen forkert.
+#
+# Operatoerens egne felter FLETTES oven paa base.yml, og operatoeren vinder paa
+# samme key. Det, der IKKE er tilladt, er at vinde med en anden TYPE: samme key
+# med to typer er en opstartsfejl, fordi en lagret vaerdis type ellers ikke er
+# kendt bagud. Det er expand-migrate-contract anvendt paa config.
+#
+# Der staar med vilje ingen labels her. Feltets navn er SYSTEMTEKST og hoerer i
+# messages*.properties under noeglen field.<key>.label (CLAUDE.md). En label i
+# en YAML ville omgaa MessageSource, og LocalizationOpsTest ville aldrig se en
+# manglende oversaettelse. Kun feltets VAERDI er kundetekst.
+theticket:
+  field-schema:
+    operators:
+      event-it:
+        version: 1
+        fields:
+          # PLAN 2.6's eget eksempel: arrangoerens logo er et custom felt og
+          # ikke en kernekolonne, fordi ikke alle kunder har arrangoerlogoer.
+          # https kraeves af typen image — et logo hentet over http ville goere
+          # kundens egen side til blandet indhold.
+          - key: organizerLogo
+            type: image
+            scope: organizer
+            role: branding.logo
+            required: false
+            since: 0
+
+          # AFVIGELSE fra PLAN 144 -- GODKENDT af Mike 06-09-2026 (spec-beslutning 32):
+          # PLAN 144 lister "billede" i katalog-KERNEN, men event-billedet er
+          # her degraderet til et custom felt. Begrundelsen er den samme som for
+          # logoet — feltet er rent visning og paavirker ingen adfaerd — men
+          # degraderingen er en aendring af den pligtige kerne og skal siges
+          # hoejt paa samme maade som primaryPurchaseUrl blev det.
+          - key: eventImage
+            type: image
+            scope: event
+            role: branding.eventImage
+            required: false
+            since: 0
