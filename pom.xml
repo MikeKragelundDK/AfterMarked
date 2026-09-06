@@ -17,6 +17,10 @@
 		<java.version>25</java.version>
 		<spring-modulith.version>2.1.1</spring-modulith.version>
 		<stripe-java.version>33.4.0</stripe-java.version>
+		<!-- Sikkerhedsloeft: Boot 4.1.1 styrer Tomcat 11.0.24, som har CVE-2026-65182,
+		     CVE-2026-65905 og CVE-2026-68525 (alle CRITICAL, rettet i 11.0.25). Trivy-gaten
+		     i CI blokerede paa dem 6/9-2026. Fjern linjen, naar Boot selv styrer >= 11.0.25. -->
+		<tomcat.version>11.0.25</tomcat.version>
 	</properties>
 	<dependencies>
 		<dependency>
