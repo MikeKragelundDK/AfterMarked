@@ -1,5 +1,6 @@
 package dk.aftermarked.localization;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -123,15 +124,17 @@ public class Translations {
 	@Transactional
 	public boolean put(String entityType, UUID entityId, String field, Locale locale, String value) {
 		Objects.requireNonNull(value, "value");
-		UUID operatorId = OperatorContext.required().value();
+		OperatorContext.required();
+		// operator_id skrives som current_operator_id() og bindes ALDRIG som
+		// parameter: så findes der ingen kodesti, der KAN bære et forkert
+		// tenant-id ind i en indsættelse -- samme doktrin som replaceAll.
 		return jdbc.sql("""
 				INSERT INTO translation (operator_id, entity_type, entity_id, field, locale, value)
-				VALUES (:operatorId, :entityType, :entityId, :field, :locale, :value)
+				VALUES (current_operator_id(), :entityType, :entityId, :field, :locale, :value)
 				ON CONFLICT (operator_id, entity_type, entity_id, field, locale)
 				DO UPDATE SET value = EXCLUDED.value, updated_at = now()
 				 WHERE translation.value IS DISTINCT FROM EXCLUDED.value
 				""")
-				.param("operatorId", operatorId)
 				.param("entityType", entityType)
 				.param("entityId", entityId)
 				.param("field", field)
@@ -193,6 +196,24 @@ public class Translations {
 	@Transactional
 	public TranslationChange replaceAll(String entityType, Collection<UUID> entityIds,
 			Set<String> ownedFields, List<TranslationRow> rows) {
+		TranslationChanges changes = replaceAllWithChanges(entityType, entityIds, ownedFields, rows);
+		return new TranslationChange(changes.written(), changes.removed());
+	}
+
+	/**
+	 * Samme erstatning som {@link #replaceAll}, men med de faktisk ændrede
+	 * rækkers før/efter-tilstand til kalderens auditspor. Udvidelsen bruges af
+	 * katalog-modulet; SQL og RLS bliver i localization, og audit-aktøren bliver
+	 * hos kalderen. RETURNING læser tilstanden i selve skrivningen, så et
+	 * samtidigt PUT ikke kan gøre et separat før-opslag forældet.
+	 *
+	 * <p>Oprettelser har ingen før-tilstand, sletninger ingen efter-tilstand.
+	 * Identiske rækker returneres ikke. Begge SQL-sætninger og kalderens audit
+	 * deler transaktion; den oprindelige tællebaserede signatur bevares.
+	 */
+	@Transactional
+	public TranslationChanges replaceAllWithChanges(String entityType, Collection<UUID> entityIds,
+			Set<String> ownedFields, List<TranslationRow> rows) {
 		Objects.requireNonNull(entityType, "entityType");
 		Objects.requireNonNull(entityIds, "entityIds");
 		Objects.requireNonNull(ownedFields, "ownedFields");
@@ -206,11 +227,11 @@ public class Translations {
 		// Intet at scope sletningen til. Raekkerne er allerede kontrolleret
 		// ovenfor, saa listen kan ikke indeholde noget, der ville gaa tabt her.
 		if (entityIds.isEmpty() || ownedFields.isEmpty()) {
-			return new TranslationChange(0, 0);
+			return new TranslationChanges(List.of());
 		}
 
 		String pushed = pushedAsJson(rows);
-		int removed = jdbc.sql("""
+		List<TranslationRowChange> changes = new ArrayList<>(jdbc.sql("""
 				DELETE FROM translation t
 				 WHERE t.entity_type = :entityType
 				   AND t.entity_id = ANY(CAST(:entityIds AS uuid[]))
@@ -219,20 +240,23 @@ public class Translations {
 				                     FROM jsonb_to_recordset(CAST(:pushed AS jsonb))
 				                            AS p(entity_id uuid, field text, locale text, value text)
 				                    WHERE p.entity_id = t.entity_id AND p.field = t.field AND p.locale = t.locale)
+				RETURNING t.entity_id, to_jsonb(t.*) AS before_state
 				""")
 				.param("entityType", entityType)
 				.param("entityIds", uuidArrayLiteral(entityIds))
 				.param("ownedFields", textArrayLiteral(ownedFields))
 				.param("pushed", pushed)
-				.update();
+				.query((rs, row) -> new TranslationRowChange(rs.getObject("entity_id", UUID.class),
+						rs.getString("before_state"), null))
+				.list());
 
 		// Et tomt dokument ville indsaette nul raekker, men saetningen ville
 		// stadig tage sine laase. Sletningen ovenfor var hele arbejdet.
 		if (rows.isEmpty()) {
-			return new TranslationChange(0, removed);
+			return new TranslationChanges(changes);
 		}
 
-		int written = jdbc.sql("""
+		changes.addAll(jdbc.sql("""
 				INSERT INTO translation (operator_id, entity_type, entity_id, field, locale, value)
 				SELECT current_operator_id(), :entityType, p.entity_id, p.field, p.locale, p.value
 				  FROM jsonb_to_recordset(CAST(:pushed AS jsonb))
@@ -241,12 +265,17 @@ public class Translations {
 				ON CONFLICT (operator_id, entity_type, entity_id, field, locale) DO UPDATE
 				   SET value = EXCLUDED.value, updated_at = now()
 				 WHERE translation.value IS DISTINCT FROM EXCLUDED.value
+				RETURNING new.entity_id,
+				          CASE WHEN old.id IS NULL THEN NULL ELSE to_jsonb(old.*) END AS before_state,
+				          to_jsonb(new.*) AS after_state
 				""")
 				.param("entityType", entityType)
 				.param("pushed", pushed)
-				.update();
+				.query((rs, row) -> new TranslationRowChange(rs.getObject("entity_id", UUID.class),
+						rs.getString("before_state"), rs.getString("after_state")))
+				.list());
 
-		return new TranslationChange(written, removed);
+		return new TranslationChanges(changes);
 	}
 
 	/**
@@ -388,6 +417,35 @@ public class Translations {
 	 * netop dét, sprintets exit-kriterie kan måles på.
 	 */
 	public record TranslationChange(int written, int removed) {
+	}
+
+	/** Ændringerne fra RETURNING; tællerne afledes af de samme rækker som auditsporet. */
+	public record TranslationChanges(List<TranslationRowChange> rows) {
+
+		public TranslationChanges {
+			rows = List.copyOf(rows);
+		}
+
+		public int written() {
+			return (int) rows.stream().filter(row -> row.afterState() != null).count();
+		}
+
+		public int removed() {
+			return rows.size() - written();
+		}
+
+	}
+
+	/** Subjektet er katalogentiteten; dokumenterne indeholder også felt, sprog og oversættelsens eget id. */
+	public record TranslationRowChange(UUID entityId, String beforeState, String afterState) {
+
+		public TranslationRowChange {
+			Objects.requireNonNull(entityId, "entityId");
+			if (beforeState == null && afterState == null) {
+				throw new IllegalArgumentException("A translation change must have a before or after state");
+			}
+		}
+
 	}
 
 }

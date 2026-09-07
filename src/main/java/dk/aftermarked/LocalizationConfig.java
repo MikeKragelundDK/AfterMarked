@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
+import dk.aftermarked.localization.SupportedLocales;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,11 +55,13 @@ public class LocalizationConfig implements WebMvcConfigurer {
 	public static final Locale DEFAULT_LOCALE = Locale.of("da");
 
 	/**
-	 * Sprogene der findes en {@code messages_<sprog>.properties} til.
-	 * Udvides listen, skal bundlen med i samme ændring — det håndhæver
-	 * {@code LocalizationOpsTest}.
+	 * Sprogene der findes en {@code messages_<sprog>.properties} til. Selve
+	 * listen bor i {@link SupportedLocales} i localization-modulet, så
+	 * katalog-indlæsningen kan læse den uden at afhænge af web-laget; her
+	 * spejles den. Udvides listen, skal bundlen med i samme ændring — det
+	 * håndhæver {@code LocalizationOpsTest}.
 	 */
-	public static final List<Locale> SUPPORTED_LOCALES = List.of(Locale.of("da"), Locale.of("en"));
+	public static final List<Locale> SUPPORTED_LOCALES = SupportedLocales.ALL;
 
 	static final String LOCALE_COOKIE_NAME = "THETICKET_LANG";
 
@@ -67,8 +70,7 @@ public class LocalizationConfig implements WebMvcConfigurer {
 	private static final Logger log = LoggerFactory.getLogger(LocalizationConfig.class);
 
 	static boolean isSupported(Locale locale) {
-		return locale != null && SUPPORTED_LOCALES.stream()
-				.anyMatch(supported -> supported.getLanguage().equals(locale.getLanguage()));
+		return SupportedLocales.isSupported(locale);
 	}
 
 	/**
