@@ -64,33 +64,35 @@ import tools.jackson.databind.JsonNode;
  */
 public final class CustomFieldValidator {
 
-	private static final String UNKNOWN_PROPERTY = "UNKNOWN_PROPERTY";
+	// Koderne er kontraktens: taget fra CatalogErrorCode, så en stavefejl her
+	// ikke kan give kunden en kode, der ikke findes i kontrakten.
+	private static final String UNKNOWN_PROPERTY = CatalogErrorCode.UNKNOWN_PROPERTY.name();
 
-	private static final String BLANK_VALUE = "BLANK_VALUE";
+	private static final String BLANK_VALUE = CatalogErrorCode.BLANK_VALUE.name();
 
-	private static final String MONEY_NOT_INTEGRAL = "MONEY_NOT_INTEGRAL";
+	private static final String MONEY_NOT_INTEGRAL = CatalogErrorCode.MONEY_NOT_INTEGRAL.name();
 
-	private static final String MONEY_MISSING_CURRENCY = "MONEY_MISSING_CURRENCY";
+	private static final String MONEY_MISSING_CURRENCY = CatalogErrorCode.MONEY_MISSING_CURRENCY.name();
 
-	private static final String UNKNOWN_CURRENCY = "UNKNOWN_CURRENCY";
+	private static final String UNKNOWN_CURRENCY = CatalogErrorCode.UNKNOWN_CURRENCY.name();
 
-	private static final String CURRENCY_MISMATCH = "CURRENCY_MISMATCH";
+	private static final String CURRENCY_MISMATCH = CatalogErrorCode.CURRENCY_MISMATCH.name();
 
-	private static final String MISSING_BASE_LOCALE = "MISSING_BASE_LOCALE";
+	private static final String MISSING_BASE_LOCALE = CatalogErrorCode.MISSING_BASE_LOCALE.name();
 
-	private static final String INVALID_LOCALE_KEY = "INVALID_LOCALE_KEY";
+	private static final String INVALID_LOCALE_KEY = CatalogErrorCode.INVALID_LOCALE_KEY.name();
 
-	private static final String NOT_TRANSLATABLE = "NOT_TRANSLATABLE";
+	private static final String NOT_TRANSLATABLE = CatalogErrorCode.NOT_TRANSLATABLE.name();
 
-	private static final String UNKNOWN_FIELD_KEY = "UNKNOWN_FIELD_KEY";
+	private static final String UNKNOWN_FIELD_KEY = CatalogErrorCode.UNKNOWN_FIELD_KEY.name();
 
-	private static final String FIELD_WRONG_SCOPE = "FIELD_WRONG_SCOPE";
+	private static final String FIELD_WRONG_SCOPE = CatalogErrorCode.FIELD_WRONG_SCOPE.name();
 
-	private static final String FIELD_TYPE_MISMATCH = "FIELD_TYPE_MISMATCH";
+	private static final String FIELD_TYPE_MISMATCH = CatalogErrorCode.FIELD_TYPE_MISMATCH.name();
 
-	private static final String FIELD_REQUIRED = "FIELD_REQUIRED";
+	private static final String FIELD_REQUIRED = CatalogErrorCode.FIELD_REQUIRED.name();
 
-	private static final String ILLEGAL_CHARACTER = "ILLEGAL_CHARACTER";
+	private static final String ILLEGAL_CHARACTER = CatalogErrorCode.ILLEGAL_CHARACTER.name();
 
 	/** Præcis samme form som V3's {@code translation_locale_format} og V4's
 	 *  {@code operator_default_locale_format}. To steder, der skal være enige om,
@@ -547,8 +549,10 @@ public final class CustomFieldValidator {
 	}
 
 	private static String describe(String key) {
-		return (key.length() <= KEY_CHARACTERS_IN_MESSAGE) ? key
-				: key.substring(0, KEY_CHARACTERS_IN_MESSAGE) + "...";
+		// Afkortet OG renset for styretegn: beskeden ender i en log, og den
+		// besked, der afviser et ulovligt tegn, må ikke selv bære tegnet.
+		return CatalogPayloadParser.withoutControlCharacters((key.length() <= KEY_CHARACTERS_IN_MESSAGE) ? key
+				: key.substring(0, KEY_CHARACTERS_IN_MESSAGE) + "...");
 	}
 
 	/**
