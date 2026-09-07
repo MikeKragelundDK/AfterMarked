@@ -50,7 +50,7 @@ class WebSecurityOpsTest {
 
 	/** Paths that are not explicitly open, and that must therefore require a login. */
 	private static final List<String> MUST_REQUIRE_LOGIN = List.of(
-			"/operator", "/admin", "/api", "/api/orders", "/sales", "/listings",
+			"/operator", "/admin", "/api", "/api/catalog", "/api/orders", "/sales", "/listings",
 			"/actuator", "/actuator/prometheus", "/actuator/info", "/actuator/env");
 
 	@Autowired
