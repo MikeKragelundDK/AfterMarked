@@ -17,8 +17,9 @@ import org.slf4j.LoggerFactory;
  * for altid), mens denne enum kan udvides med en almindelig ændring.
  *
  * <p>Rækken gemmer altid navnet på en af DISSE konstanter. Kundens rå token
- * bevares ikke: den rapporteres i svarets {@code warnings[]} og logges på WARN,
- * men den lagres som {@link #UNKNOWN}. Det er prisen for, at aggregatet og
+ * bevares ikke: den rapporteres i svarets {@code warnings[]} med sin STI, og
+ * ingest-servicen logger én samlet WARN pr. push med antallet — tokenen selv
+ * logges aldrig. Den lagres som {@link #UNKNOWN}. Det er prisen for, at aggregatet og
  * kolonnen kan udtrykke præcis det samme — alternativet, en nullable kolonne med
  * en {@code Optional}-komponent, betyder at en admin-redigering GENNEM
  * aggregatet skriver NULL og sletter kundens egen værdi i stilhed.
@@ -59,10 +60,14 @@ public enum SalesStatus {
 	 * tyrkisk lokalitet ville {@code "i"} ellers blive et prikløst I, og
 	 * genkendelsen ville afhænge af maskinens sprogindstilling.
 	 *
-	 * <p>En ukendt værdi logges på WARN med den rå token, og kalderen ved ingest
-	 * lægger den i svarets {@code warnings[]} som {@code UNKNOWN_ENUM_VALUE}.
-	 * {@code null} er derimod tavs: så har kunden ikke sendt en status, og der er
-	 * intet at fortælle om.
+	 * <p>En ukendt værdi logges ALDRIG med sin token: den er kundens data, kan
+	 * indeholde linjeskift, og et push med 2.000 events i samme ukendte status
+	 * ville give 2.000 linjer. Sporet er svarets {@code warnings[]}, hvor kalderen
+	 * ved ingest lægger STIEN som {@code UNKNOWN_ENUM_VALUE}. Her kun en
+	 * DEBUG-linje uden værdien. {@code null} er derimod tavs — og kommer aldrig
+	 * fra wire: parseren kræver feltet og afviser fravær som
+	 * {@code MISSING_REQUIRED_FIELD}, så {@code null} her er en læsning af en
+	 * række, ikke en kundes udeladelse.
 	 */
 	public static SalesStatus fromWire(String value) {
 		if (value == null) {
@@ -70,7 +75,8 @@ public enum SalesStatus {
 		}
 		SalesStatus recognised = recognise(value);
 		if (recognised == null) {
-			log.warn("Unknown sales status [{}] in catalog data; storing UNKNOWN", value);
+			log.debug("Unrecognised sales status token of {} characters in catalog data; storing UNKNOWN",
+					value.length());
 			return UNKNOWN;
 		}
 		return recognised;
@@ -98,7 +104,7 @@ public enum SalesStatus {
 	/**
 	 * Den ENE normalisering og den ENE tabel over kendte tokens. {@code null}
 	 * betyder "ikke en værdi, vi kender" — og det er kalderens valg, om det
-	 * fortjener en WARN-linje eller bare et {@code false}.
+	 * fortjener en advarsel i svaret eller bare et {@code false}.
 	 */
 	private static SalesStatus recognise(String value) {
 		// Locale.ROOT og ikke maskinens egen: i tyrkisk lokalitet bliver "i" til

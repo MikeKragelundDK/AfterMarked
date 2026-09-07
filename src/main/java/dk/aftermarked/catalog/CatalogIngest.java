@@ -56,6 +56,9 @@ public interface CatalogIngest {
 	 *     en anden valuta, end verify svarede i, eller hvis operatøren kører
 	 *     enkelt-valuta og kataloget ville få sin anden valuta
 	 * @throws CatalogException hvis rækkerne ikke kunne skrives
+	 * @throws IllegalArgumentException hvis verify-svarets face value er ugyldigt
+	 *     for eventet ud over valutaen (fx negativt) — {@code Event.acceptFaceValue}
+	 *     kaster, og transaktionen ruller et netop skrevet skelet tilbage
 	 */
 	Event enrich(VerifiedTicket verified);
 

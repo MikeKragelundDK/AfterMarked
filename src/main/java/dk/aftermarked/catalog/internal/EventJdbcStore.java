@@ -265,10 +265,12 @@ public class EventJdbcStore {
 	 *                    katalog-push genkende og udfylde præcis denne række
 	 * @param startsAt    starttidspunktet fra verify-svaret
 	 * @param currency    eventets valuta, taget fra verify-svarets face value
-	 * @return id'et på den nyoprettede række, eller tomt hvis eventet allerede
-	 *         fandtes
+	 * @return den nyoprettede række som {@link UpsertOutcome} — {@code created},
+	 *         ingen før-tilstand, hele rækken som efter-tilstand til audit-sporet —
+	 *         eller tomt hvis eventet allerede fandtes
 	 */
-	public Optional<UUID> insertSkeleton(UUID organizerId, EventRef ref, Instant startsAt, Currency currency) {
+	public Optional<UpsertOutcome> insertSkeleton(UUID organizerId, EventRef ref, Instant startsAt,
+			Currency currency) {
 		Objects.requireNonNull(organizerId, "organizerId");
 		Objects.requireNonNull(ref, "ref");
 		Objects.requireNonNull(startsAt, "startsAt");
@@ -282,7 +284,7 @@ public class EventJdbcStore {
 				INSERT INTO event (operator_id, organizer_id, ref, title, starts_at, sales_status, currency)
 				VALUES (current_operator_id(), :organizerId, :ref, :title, :startsAt, :salesStatus, :currency)
 				ON CONFLICT (operator_id, ref) DO NOTHING
-				RETURNING id
+				RETURNING id, ref, to_jsonb(new.*) AS after_state
 				""")
 				.param("organizerId", organizerId)
 				.param("ref", ref.value())
@@ -296,7 +298,8 @@ public class EventJdbcStore {
 				// og genoptager aldrig ventelisten.
 				.param("salesStatus", SalesStatus.UNKNOWN.name())
 				.param("currency", currency.getCurrencyCode())
-				.query(UUID.class)
+				.query((rs, row) -> new UpsertOutcome(rs.getObject("id", UUID.class), rs.getString("ref"), true, null,
+						rs.getString("after_state")))
 				.optional();
 	}
 

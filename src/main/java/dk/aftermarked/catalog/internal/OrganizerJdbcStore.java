@@ -205,18 +205,36 @@ public class OrganizerJdbcStore {
 	 * <p>{@code ON CONFLICT DO NOTHING} og ikke en upsert: rækken er VORES, og
 	 * en anden skrivning må ikke kunne omdøbe den. Andet kald svarer derfor
 	 * {@code false}, og dét er den normale tilstand — ikke en fejl.
+	 *
+	 * <p>Den boolske form er bevaret til de kaldere, der kun skal vide OM rækken
+	 * blev til; {@link #createDefault} er den samme skrivning med hele rækken
+	 * retur, til audit-sporet.
 	 */
 	public boolean insertDefault(String name) {
+		return createDefault(name).isPresent();
+	}
+
+	/**
+	 * Samme skrivning som {@link #insertDefault}, men den nyoprettede række
+	 * kommer tilbage som {@link UpsertOutcome} — {@code created}, ingen
+	 * før-tilstand, hele rækken som efter-tilstand — så lazy enrichment kan
+	 * auditere arrangøren på lige fod med det event og den billettype, den
+	 * opretter i samme kald. Tom betyder "fandtes allerede" og er SUCCES.
+	 */
+	public Optional<UpsertOutcome> createDefault(String name) {
 		Objects.requireNonNull(name, "name");
 		OperatorContext.required();
 		return jdbc.sql("""
 				INSERT INTO organizer (operator_id, ref, name, is_default)
 				VALUES (current_operator_id(), :ref, :name, true)
 				ON CONFLICT (operator_id, ref) DO NOTHING
+				RETURNING id, ref, to_jsonb(new.*) AS after_state
 				""")
 				.param("ref", DEFAULT_REF)
 				.param("name", name)
-				.update() > 0;
+				.query((rs, row) -> new UpsertOutcome(rs.getObject("id", UUID.class), rs.getString("ref"), true, null,
+						rs.getString("after_state")))
+				.optional();
 	}
 
 	/**
@@ -255,6 +273,16 @@ public class OrganizerJdbcStore {
 				.param("createdAt", utc(organizer.createdAt()))
 				.param("updatedAt", utc(organizer.updatedAt()))
 				.update();
+	}
+
+	/**
+	 * Operatørens default-arrangør til nye skelet-events. RLS afgrænser opslaget
+	 * til den bundne operatør, og det partielle unikke indeks sikrer højst én.
+	 */
+	public Optional<UUID> findDefaultId() {
+		OperatorContext.required();
+		return jdbc.sql("SELECT id FROM organizer WHERE is_default")
+				.query(UUID.class).optional();
 	}
 
 	/** Arrangøren bag kundens egen reference, som RLS ser den — tom for en anden kundes ref. */

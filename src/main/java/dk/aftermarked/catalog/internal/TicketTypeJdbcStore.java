@@ -241,7 +241,7 @@ public class TicketTypeJdbcStore {
 	 * den sammensatte fremmednøgle med en 23503 — det er dét, der gør "ét event =
 	 * én valuta" til databasens ansvar frem for disciplin.
 	 */
-	public Optional<UUID> insertSkeleton(UUID eventId, TicketTypeRef ref, String name, Money faceValue) {
+	public Optional<UpsertOutcome> insertSkeleton(UUID eventId, TicketTypeRef ref, String name, Money faceValue) {
 		Objects.requireNonNull(eventId, "eventId");
 		Objects.requireNonNull(ref, "ref");
 		Objects.requireNonNull(name, "name");
@@ -251,12 +251,15 @@ public class TicketTypeJdbcStore {
 				INSERT INTO ticket_type (operator_id, event_id, ref, name, face_value_minor, currency)
 				VALUES (current_operator_id(), :eventId, :ref, :name, :faceValueMinor, :currency)
 				ON CONFLICT (operator_id, event_id, ref) DO NOTHING
-				RETURNING id
+				RETURNING id, ref, to_jsonb(new.*) AS after_state
 				""")
 				.param("eventId", eventId)
 				.param("ref", ref.value())
 				.param("name", name);
-		return MoneyColumns.bind(statement, "faceValue", faceValue).query(UUID.class).optional();
+		return MoneyColumns.bind(statement, "faceValue", faceValue)
+				.query((rs, row) -> new UpsertOutcome(rs.getObject("id", UUID.class), rs.getString("ref"), true, null,
+						rs.getString("after_state")))
+				.optional();
 	}
 
 	/**
